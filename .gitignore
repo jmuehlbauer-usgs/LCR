@@ -1,0 +1,9 @@
+Info/
+Figures/Equip_Photos
+Data/Extech/Raw
+Data/HOBO/Light/Deployment_Info
+Data/HOBO/Light/Raw
+Data/HOBO/SpC/Raw
+Data/MiniDOT/Raw
+Data/Sticky_Counts
+*.db
