@@ -1,7 +1,7 @@
 ##### Set Working Directory, read in data #####
 
 ## Working directory
-setwd('P:/Biological/Flyco/LCR/Data & Analysis')
+setwd('P:/Biological/Flyco/LCR/Data/')
 
 ## Get data file names
  ## April and May 2015

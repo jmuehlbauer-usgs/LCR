@@ -1,5 +1,6 @@
 ##### Read in light sensor data #####
-I am an idiot
+#I am an idiot
+#We are all idiots in a sea of cupcakes. EWK, committed
 ## Set preliminary working directory for getting data (network or local)
 #setwd('P:/Biological/Flyco/LCR/Data & Analysis/Data Loggers/HOBO/LIGHT')
 setwd('C:/Users/jmuehlbauer/Documents/Projects/LCR/LCR Food Web/Data & Analysis/Data Loggers/HOBO/LIGHT')
