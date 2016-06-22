@@ -1,0 +1,24 @@
+# Local (Jeff's computer)
+cd C:/Users/jmuehlbauer/Documents/Projects/LCR/'LCR Food Web'
+
+# Network (P drive)
+cd P:/BIOLOGICAL/Flyco/LCR
+
+# Initialize git repository
+git init
+
+# Add remote origin
+git remote add origin https://github.com/jmuehlbauer-usgs/LCR.git
+
+# Pull from remote
+git pull origin master
+
+# Add files to commit
+git status
+git add <type files to add here, separated by a space>
+
+git commit -m 'Type something here.'
+
+# Push to remote
+git push origin master
+
