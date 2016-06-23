@@ -1,52 +1,58 @@
+##### Code for HOBO light sensors #####
+
+
 ##### Read in light sensor data #####
-#I am an idiot
-#We are all idiots in a sea of cupcakes. EWK, committed
+
 ## Set preliminary working directory for getting data (network or local)
-#setwd('P:/Biological/Flyco/LCR/Data & Analysis/Data Loggers/HOBO/LIGHT')
-setwd('C:/Users/jmuehlbauer/Documents/Projects/LCR/LCR Food Web/Data & Analysis/Data Loggers/HOBO/LIGHT')
+setwd('P:/Biological/Flyco/LCR/Data/HOBO/Light/Processed')
 
-## Get light data file names
- ## April and May 2015
-apr15<-list.files('2015-04',pattern='.csv')
-may15<-list.files('2015-05',pattern='.csv')
-jun15<-list.files('2015-06',pattern='.csv')
-apr16<-list.files('2016-04',pattern='.csv')
-may16<-list.files('2016-05',pattern='.csv')
+## Get light data file names (Add new lines for new months here, and also at Line 40).
+Apr15files <- list.files('2015-04', pattern = '.csv')
+May15files <- list.files('2015-05', pattern = '.csv')
+Jun15files <- list.files('2015-06', pattern = '.csv')
+Apr16files <- list.files('2016-04', pattern = '.csv')
+May16files <- list.files('2016-05', pattern = '.csv')
 
-## Read in data files, cut out useless rows and columns of data, including bad dates
-aprdat<-list()
-maydat<-list()
-apr6dat<-list()
-for(i in 1:length(apr15)){
-	t1<-read.csv(paste0('Data Loggers/HOBO/LIGHT/April_2015/',apr15[i]),skip=1,row.names=1)
-	t2<-t1[,1:3]
-		colnames(t2)<-c('DateTime','Temp','Lux')
-		t2$Date<-as.Date(t2$DateTime,'%m/%d/%y')
-	aprdat[[i]]<-t2[t2$Date %in% as.Date(c('2015-04-14','2015-04-15','2015-04-16')),]
-	}
-	names(aprdat)<-substr(apr15,1,regexpr('0',apr15)-1)
-for(i in 1:length(may15)){
-	t1<-read.csv(paste0('Data Loggers/HOBO/LIGHT/May_2015/',may15[i]),skip=1,row.names=1)
-	t2<-t1[,1:3]
-		colnames(t2)<-c('DateTime','Temp','Lux')
-		t2$Date<-as.Date(t2$DateTime,'%m/%d/%y')		
-	maydat[[i]]<-t2[t2$Date %in% as.Date(c('2015-05-19','2015-05-20','2015-05-21')),]
-	}
-	names(maydat)<-substr(may15,1,regexpr('_',may15)-1)
-for(i in 1:length(apr16)){
-	t1<-read.csv(paste0('Data Loggers/HOBO/LIGHT/April_2016/',apr16[i]),skip=1,row.names=1)
-	t2<-t1[,1:3]
-		colnames(t2)<-c('DateTime','Temp','Lux')
-		t2$Date<-as.Date(t2$DateTime,'%m/%d/%y')
-	apr6dat[[i]]<-t2[t2$Date %in% as.Date(c('2016-04-19','2016-04-20','2016-04-21')),]
-	}
-	names(apr6dat)<-substr(apr16,1,regexpr('0',apr16)-1)	
+## Create function to read in data
+filefx <- function(X,files,dates) {
+	filename <- deparse(substitute(files))
+	yr <- paste0('20', substr(filename, 4, 5))
+	montmp <- grep(substr(filename, 1, 3), month.abb)
+	mon <- ifelse(substr(montmp, 1, 1) != '1', paste0('0', montmp), montmp)
+	yrmon <- paste0(yr, '-', mon)
+	t1 <- read.csv(paste0(yrmon, '/', files[X]), skip = 1, row.names = 1)
+	t2 <- t1[,1:3]
+		colnames(t2) <- c('POSIX', 'Temp', 'Lux')
+		t2$POSIX <- as.POSIXlt(t1[,1],format='%m/%d/%y %I:%M:%S %p')
+	mydates <- paste0(yrmon, '-', dates)
+	t3 <- t2[as.Date(t2$POSIX) %in% as.Date(mydates),]
+}
 
-##### Set main working directory #####
+## Make list element names more descriptive
+listname <- function(x) {
+	deparse(substitute(x))
+	filename2 <- deparse(substitute(x))
+	fileupper <- paste0(toupper(substr(filename2, 1, 1)), substr(filename2, 2, 5), 'files')
+	filename3 <- get(fileupper)
+	substr(filename3, 1, regexpr('_', filename3) - 1)
+}
 
-## Network or local?
-#setwd('P:/Biological/Flyco/LCR/Data & Analysis')
-setwd('C:/Users/jmuehlbauer/Documents/Projects/LCR/LCR Food Web/Data & Analysis')
+## Read in data, by month. Limit to only dates containing real data (dates = )  (Add new lines for new months here).
+apr15 <- lapply(1:length(Apr15files), function(x) filefx(X = x, files = Apr15files, dates = 14:16))
+	names(apr15) <- listname(apr15)
+may15 <- lapply(1:length(May15files), function(x) filefx(X = x, files = May15files, dates = 19:21))
+	names(may15) <- listname(may15)
+jun15 <- lapply(1:length(Jun15files), function(x) filefx(X = x, files = Jun15files, dates = 25:27))
+	names(jun15) <- listname(jun15)
+apr16 <- lapply(1:length(Apr16files), function(x) filefx(X = x, files = Apr16files, dates = 19:23))
+	names(apr16) <- listname(apr16)
+may16 <- lapply(1:length(May16files), function(x) filefx(X = x, files = May16files, dates = 17:19))
+	names(may16) <- listname(may16)
+
+## Set the working directory to a higher level
+setwd('P:/Biological/Flyco/LCR')
+
+### STOPPED HERE. NExt time need to actually work with the data (now that it's all optimized to be easily imported).
 
 	
 ##### Get some averages for data to check data quality #####
