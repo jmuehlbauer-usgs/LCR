@@ -1,20 +1,59 @@
 ##### Code for HOBO light sensors #####
 
 
+##### Load libraries #####
+
+## Load parallel and lubridate libraries, for running apply operations in parallel and dealing with datetimes
+library(parallel)
+library(lubridate)
+
+
 ##### Read in light sensor data #####
 
 ## Set preliminary working directory for getting data (network or local)
 setwd('P:/Biological/Flyco/LCR/Data/HOBO/Light/Processed')
 
-## Get light data file names (Add new lines for new months here, and also at Line 40).
+## Get light data file names
+	## NOTE: Add new lines for new months here, and also at Lines 25 and 93.
 Apr15files <- list.files('2015-04', pattern = '.csv')
 May15files <- list.files('2015-05', pattern = '.csv')
 Jun15files <- list.files('2015-06', pattern = '.csv')
 Apr16files <- list.files('2016-04', pattern = '.csv')
 May16files <- list.files('2016-05', pattern = '.csv')
+Jun16files <- list.files('2016-06', pattern = '.csv')
+
+## Create dataframes of start-stop sensor deployment times
+	## Trim an additional hour off start and stop deployment times just to be safe.
+deep <- as.data.frame(c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'))
+	colnames(deep) <- 'Site'
+	deep$Apr15Start <- as.POSIXlt(paste('2015-04-14', c('15:35', '12:10', '09:30', '09:50', '15:30'))) + 3600
+	deep$Apr15Stop <- as.POSIXlt(paste('2015-04-16', c('12:31', '10:08', '08:10', '08:15', '11:30'))) - 3600
+	deep$May15Start <- as.POSIXlt(paste('2015-05-19', c('09:48', '08:00', '11:40', '09:30', '14:00'))) + 3600
+	deep$May15Stop <- as.POSIXlt(paste('2015-05-22', c('12:44', '14:00', '19:00', '13:10', '13:10'))) - 3600
+		## Adjust removal dates for some May15 traps (left in the field for a while)
+		deep[deep$Site == 'Coyote', 'May15Stop'] <- as.POSIXlt('2015-05-24 23:55') - 0
+		deep[deep$Site == 'Boulders', 'May15Stop'] <- as.POSIXlt('2015-06-25 13:10') - 3600
+	deep$Apr16Start <- as.POSIXlt(paste('2016-04-19', c('17:10', '14:20', '10:20', '11:00', '15:15'))) + 3600
+	deep$Apr16Stop <- as.POSIXlt(paste('2016-04-23', c('10:55', '12:30', '14:00', '11:50', '16:00'))) - 3600
+		## Adjust removal dates for some traps (LCR intensive trip, some variation in trip length)
+		deep[c(1,5), 'Apr16Stop'] <- as.POSIXlt(deep[c(1,5), 'Apr16Stop']) - 24 * 3600		
+	deep$May16Start <- as.POSIXlt(paste('2016-05-17', c('18:00', '14:30', '10:30', '10:37', '15:34'))) + 3600
+	deep$May16Stop <- as.POSIXlt(paste('2016-05-19', c('13:45', '10:00', '07:00', '08:12', '11:55'))) - 3600
+	#deep$Jun16Start <- as.POSIXlt(paste('2016-06-24', c('16:30', '13:45', '09:00', ))) + 3600
+	#deep$Jun16Stop <- as.POSIXlt(paste('2016-06-26', c('10:35', '08:27', '06:00', ))) - 3600
+long <- as.data.frame(substr(Jun15files, 1, regexpr('_', Jun15files) - 1))
+	colnames(long) <- 'Site'
+	long$Jun15Start <- as.POSIXlt(paste('2015-06-25', c('15:15', '14:15', '13:10', '12:20', '11:30', '10:55', '09:30', '09:27', '11:05', '11:40', '12:35', '13:15', '13:40', '16:09', '17:05', '17:30', '18:05'))) + 3600
+	long$Jun15Stop <- as.POSIXlt(paste('2015-06-27', c('10:30', '10:00', '09:20', '09:00', '08:30', '08:05', '06:00', '06:43', '07:35', '08:05', '08:43', '09:06', '09:26', '10:33', '11:56', '12:19', '12:50'))) - 3600
+		## Adjust removal dates for RKM19 trap (flipped over)
+		long[long$Site == 'Rkm19.0', 'Jun15Stop'] <- as.POSIXlt('2015-06-26 23:55') - 0
+
+## Create dataframe of sensor depths
+sensor <- as.data.frame(cbind(1:4, c(0, .35, .75, 1.15)))
+	colnames(sensor) <- c('Sensor', 'Depth')
 
 ## Create function to read in data
-filefx <- function(X,files,dates) {
+filefx <- function(X,files) {
 	filename <- deparse(substitute(files))
 	yr <- paste0('20', substr(filename, 4, 5))
 	montmp <- grep(substr(filename, 1, 3), month.abb)
@@ -24,8 +63,28 @@ filefx <- function(X,files,dates) {
 	t2 <- t1[,1:3]
 		colnames(t2) <- c('POSIX', 'Temp', 'Lux')
 		t2$POSIX <- as.POSIXlt(t1[,1],format='%m/%d/%y %I:%M:%S %p')
-	mydates <- paste0(yrmon, '-', dates)
-	t3 <- t2[as.Date(t2$POSIX) %in% as.Date(mydates),]
+		t2$Temp <- round(t2$Temp, 2)
+		t2$Lux <- round(t2$Lux)
+	samp <- substr(filename, 1, 5)
+	mysite <- substr(files[X], 1, regexpr('_', files[X]) - 1)
+	if(substr(files[X],1,3) == 'Rkm'){
+		t2$Depth <- 0
+		date1 <- long[long$Site == mysite, paste0(samp, 'Start')]
+		date2 <- long[long$Site == mysite, paste0(samp, 'Stop')]		
+	} else{
+		mysite2 <- substr(mysite, 1, 4)
+		date1 <- deep[substr(deep$Site,1, 4) == mysite2, paste0(samp, 'Start')]
+		date2 <- deep[substr(deep$Site,1, 4) == mysite2, paste0(samp, 'Stop')]
+		if(regexpr('-', mysite) > 0) {
+			sensnum <- as.numeric(substr(files[X], (regexpr('-', mysite) + 1)[1], (regexpr('-', mysite) + 1)[1]))
+			t2$Depth <- sensor[sensor$Sensor == sensnum, 'Depth']
+		} else{
+			t2$Depth <- ifelse(nchar(mysite) > 8, 1, 0)
+		}
+	}
+	### Stopped here. Need to unlist sites within each sample month (BlueSurface with Blue, Blue-1, 2, 3, 4 together, etc.)
+	int <- new_interval(date1, date2)
+	t3 <- t2[t2$POSIX %within% int,]
 }
 
 ## Make list element names more descriptive
@@ -37,24 +96,48 @@ listname <- function(x) {
 	substr(filename3, 1, regexpr('_', filename3) - 1)
 }
 
-## Read in data, by month. Limit to only dates containing real data (dates = )  (Add new lines for new months here).
-apr15 <- lapply(1:length(Apr15files), function(x) filefx(X = x, files = Apr15files, dates = 14:16))
+## Make socket clusters for running lapply operations in parallel
+	## NOTE: Add new lines for new months here.
+cl<-makeCluster(getOption("cl.cores",detectCores()-1))
+clusterExport(cl = cl, varlist = objects())
+cllibs <- clusterEvalQ(cl, library(lubridate))
+
+## Read in data, by month
+	## NOTE: Add new lines for new months here.
+apr15 <- parLapply(cl, 1:length(Apr15files), function(x) filefx(X = x, files = Apr15files))
 	names(apr15) <- listname(apr15)
-may15 <- lapply(1:length(May15files), function(x) filefx(X = x, files = May15files, dates = 19:21))
+may15 <- parLapply(cl, 1:length(May15files), function(x) filefx(X = x, files = May15files))
 	names(may15) <- listname(may15)
-jun15 <- lapply(1:length(Jun15files), function(x) filefx(X = x, files = Jun15files, dates = 25:27))
+jun15 <- parLapply(cl, 1:length(Jun15files), function(x) filefx(X = x, files = Jun15files))
 	names(jun15) <- listname(jun15)
-apr16 <- lapply(1:length(Apr16files), function(x) filefx(X = x, files = Apr16files, dates = 19:23))
+apr16 <- parLapply(cl, 1:length(Apr16files), function(x) filefx(X = x, files = Apr16files))
 	names(apr16) <- listname(apr16)
-may16 <- lapply(1:length(May16files), function(x) filefx(X = x, files = May16files, dates = 17:19))
+may16 <- parLapply(cl, 1:length(May16files), function(x) filefx(X = x, files = May16files))
 	names(may16) <- listname(may16)
+#jun16 <- parLapply(cl, 1:length(Jun16files), function(x) filefx(X = x, files = Jun16files))
+#	names(jun16) <- listname(jun16)
+
+## Close the clusters
+stopCluster(cl)
 
 ## Set the working directory to a higher level
 setwd('P:/Biological/Flyco/LCR')
 
-### STOPPED HERE. NExt time need to actually work with the data (now that it's all optimized to be easily imported).
 
-	
+##### Get light attenuation coefficients #####
+
+## Condense light sensor arrays by site
+a15 <- 
+
+
+
+
+
+
+
+
+##### OLD CODE BELOW #####
+
 ##### Get some averages for data to check data quality #####
 
 ## Write a function for computing means, medians, maxima by date
