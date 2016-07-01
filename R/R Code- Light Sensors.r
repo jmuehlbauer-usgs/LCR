@@ -3,8 +3,9 @@
 
 ##### Load libraries #####
 
-## Load parallel and lubridate libraries, for running apply operations in parallel and dealing with datetimes
+## Load parallel, foreach, and lubridate libraries, for running apply operations in parallel and dealing with datetimes
 library(parallel)
+library(foreach)
 library(lubridate)
 
 
@@ -14,7 +15,9 @@ library(lubridate)
 setwd('P:/Biological/Flyco/LCR/Data/HOBO/Light/Processed')
 
 ## Get light data file names
-	## NOTE: Add new lines for new months here, and also at Lines 25 and 93.
+	## NOTE: Add new lines for new months here, and also at Lines 25, 117, and 132.
+samptype <- c('deep', 'deep', 'long', 'deep', 'deep', 'deep')
+	names(samptype) <- c('apr15', 'may15', 'jun15', 'apr16', 'may16', 'jun16')
 Apr15files <- list.files('2015-04', pattern = '.csv')
 May15files <- list.files('2015-05', pattern = '.csv')
 Jun15files <- list.files('2015-06', pattern = '.csv')
@@ -23,6 +26,7 @@ May16files <- list.files('2016-05', pattern = '.csv')
 Jun16files <- list.files('2016-06', pattern = '.csv')
 
 ## Create dataframes of start-stop sensor deployment times
+	## NOTE: Add new lines for new months here.
 	## Trim an additional hour off start and stop deployment times just to be safe.
 deep <- as.data.frame(c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'))
 	colnames(deep) <- 'Site'
@@ -31,12 +35,11 @@ deep <- as.data.frame(c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'))
 	deep$May15Start <- as.POSIXlt(paste('2015-05-19', c('09:48', '08:00', '11:40', '09:30', '14:00'))) + 3600
 	deep$May15Stop <- as.POSIXlt(paste('2015-05-22', c('12:44', '14:00', '19:00', '13:10', '13:10'))) - 3600
 		## Adjust removal dates for some May15 traps (left in the field for a while)
-		deep[deep$Site == 'Coyote', 'May15Stop'] <- as.POSIXlt('2015-05-24 23:55') - 0
-		deep[deep$Site == 'Boulders', 'May15Stop'] <- as.POSIXlt('2015-06-25 13:10') - 3600
+		deep[deep$Site %in% c('Coyote', 'Boulders'), 'May15Stop'] <- c(as.POSIXlt('2015-05-24 23:55') - 0, as.POSIXlt('2015-06-25 13:10') - 3600)
 	deep$Apr16Start <- as.POSIXlt(paste('2016-04-19', c('17:10', '14:20', '10:20', '11:00', '15:15'))) + 3600
-	deep$Apr16Stop <- as.POSIXlt(paste('2016-04-23', c('10:55', '12:30', '14:00', '11:50', '16:00'))) - 3600
+	deep$Apr16Stop <- as.POSIXlt(paste('2016-04-23', c('10:55', '09:00', '14:00', '11:50', '16:00'))) - 3600
 		## Adjust removal dates for some traps (LCR intensive trip, some variation in trip length)
-		deep[c(1,5), 'Apr16Stop'] <- as.POSIXlt(deep[c(1,5), 'Apr16Stop']) - 24 * 3600		
+		deep[deep$Site %in% c('Chute', 'Boulders'), 'Apr16Stop'] <- deep[deep$Site %in% c('Chute', 'Boulders'), 'Apr16Stop'] - 24 * 3600
 	deep$May16Start <- as.POSIXlt(paste('2016-05-17', c('18:00', '14:30', '10:30', '10:37', '15:34'))) + 3600
 	deep$May16Stop <- as.POSIXlt(paste('2016-05-19', c('13:45', '10:00', '07:00', '08:12', '11:55'))) - 3600
 	#deep$Jun16Start <- as.POSIXlt(paste('2016-06-24', c('16:30', '13:45', '09:00', ))) + 3600
@@ -48,10 +51,13 @@ long <- as.data.frame(substr(Jun15files, 1, regexpr('_', Jun15files) - 1))
 		## Adjust removal dates for RKM19 trap (flipped over)
 		long[long$Site == 'Rkm19.0', 'Jun15Stop'] <- as.POSIXlt('2015-06-26 23:55') - 0
 
-## Create dataframe of sensor depths
-sensor <- as.data.frame(cbind(1:4, c(0, .35, .75, 1.15)))
+## Create dataframe of sensor depths and site Rkms
+sensor <- as.data.frame(cbind(1:4, c(0, .35, .65, .84)))
 	colnames(sensor) <- c('Sensor', 'Depth')
-
+siterkm <- as.data.frame(deep$Site)
+	colnames(siterkm) <- 'Site'
+	siterkm$Rkm <- c(20.75, 16.2, 10.4, 9.0, 1.95)
+	
 ## Create function to read in data
 filefx <- function(X,files) {
 	filename <- deparse(substitute(files))
@@ -59,36 +65,39 @@ filefx <- function(X,files) {
 	montmp <- grep(substr(filename, 1, 3), month.abb)
 	mon <- ifelse(substr(montmp, 1, 1) != '1', paste0('0', montmp), montmp)
 	yrmon <- paste0(yr, '-', mon)
+	samp <- substr(filename, 1, 5)
+	mysite <- substr(files[X], 1, regexpr('_', files[X]) - 1)
 	t1 <- read.csv(paste0(yrmon, '/', files[X]), skip = 1, row.names = 1)
 	t2 <- t1[,1:3]
 		colnames(t2) <- c('POSIX', 'Temp', 'Lux')
-		t2$POSIX <- as.POSIXlt(t1[,1],format='%m/%d/%y %I:%M:%S %p')
+		t2$POSIX <- as.POSIXlt(t1[,1],format='%m/%d/%y %I:%M:%S %p', tz = 'America/Phoenix')
 		t2$Temp <- round(t2$Temp, 2)
 		t2$Lux <- round(t2$Lux)
-	samp <- substr(filename, 1, 5)
-	mysite <- substr(files[X], 1, regexpr('_', files[X]) - 1)
 	if(substr(files[X],1,3) == 'Rkm'){
+		t2$Site <- mysite
+		t2$Rkm <- as.numeric(substr(mysite, 4, 8))
 		t2$Depth <- 0
 		date1 <- long[long$Site == mysite, paste0(samp, 'Start')]
 		date2 <- long[long$Site == mysite, paste0(samp, 'Stop')]		
 	} else{
 		mysite2 <- substr(mysite, 1, 4)
+		t2$Site <- siterkm[match(mysite2, substr(siterkm$Site, 1, 4)),'Site']
+		t2$Rkm <- siterkm[substr(siterkm$Site, 1, 4) == mysite2, 'Rkm']
 		date1 <- deep[substr(deep$Site,1, 4) == mysite2, paste0(samp, 'Start')]
 		date2 <- deep[substr(deep$Site,1, 4) == mysite2, paste0(samp, 'Stop')]
 		if(regexpr('-', mysite) > 0) {
-			sensnum <- as.numeric(substr(files[X], (regexpr('-', mysite) + 1)[1], (regexpr('-', mysite) + 1)[1]))
+			sensnum <- as.numeric(substr(files[X], regexpr('-', mysite)[1] + 1, regexpr('-', mysite)[1] + 1))
 			t2$Depth <- sensor[sensor$Sensor == sensnum, 'Depth']
 		} else{
-			t2$Depth <- ifelse(nchar(mysite) > 8, 1, 0)
+			t2$Depth <- ifelse(nchar(mysite) > 8, 0, .3)
 		}
 	}
-	### Stopped here. Need to unlist sites within each sample month (BlueSurface with Blue, Blue-1, 2, 3, 4 together, etc.)
 	int <- new_interval(date1, date2)
 	t3 <- t2[t2$POSIX %within% int,]
 }
 
-## Make list element names more descriptive
-listname <- function(x) {
+## Make element names of monthly lists more descriptive
+indivname <- function(x) {
 	deparse(substitute(x))
 	filename2 <- deparse(substitute(x))
 	fileupper <- paste0(toupper(substr(filename2, 1, 1)), substr(filename2, 2, 5), 'files')
@@ -96,29 +105,35 @@ listname <- function(x) {
 	substr(filename3, 1, regexpr('_', filename3) - 1)
 }
 
+## Make element names of consolidated list more descriptive
+listnames <- function(X) {
+	first <- X$POSIX[1]
+	paste0(tolower(month.abb[month(first)]), substr(year(first), 3, 4))
+}
+
 ## Make socket clusters for running lapply operations in parallel
-	## NOTE: Add new lines for new months here.
 cl<-makeCluster(getOption("cl.cores",detectCores()-1))
-clusterExport(cl = cl, varlist = objects())
-cllibs <- clusterEvalQ(cl, library(lubridate))
+	clusterExport(cl = cl, varlist = ls())
+	cllibs <- clusterEvalQ(cl, c(library(lubridate), library(foreach)))
 
 ## Read in data, by month
 	## NOTE: Add new lines for new months here.
 apr15 <- parLapply(cl, 1:length(Apr15files), function(x) filefx(X = x, files = Apr15files))
-	names(apr15) <- listname(apr15)
+	names(apr15) <- indivname(apr15)
 may15 <- parLapply(cl, 1:length(May15files), function(x) filefx(X = x, files = May15files))
-	names(may15) <- listname(may15)
+	names(may15) <- indivname(may15)
 jun15 <- parLapply(cl, 1:length(Jun15files), function(x) filefx(X = x, files = Jun15files))
-	names(jun15) <- listname(jun15)
+	names(jun15) <- indivname(jun15)
 apr16 <- parLapply(cl, 1:length(Apr16files), function(x) filefx(X = x, files = Apr16files))
-	names(apr16) <- listname(apr16)
+	names(apr16) <- indivname(apr16)
 may16 <- parLapply(cl, 1:length(May16files), function(x) filefx(X = x, files = May16files))
-	names(may16) <- listname(may16)
+	names(may16) <- indivname(may16)
 #jun16 <- parLapply(cl, 1:length(Jun16files), function(x) filefx(X = x, files = Jun16files))
-#	names(jun16) <- listname(jun16)
+#	names(jun16) <- indivname(jun16)
 
-## Close the clusters
-stopCluster(cl)
+## Condense each sample month into a single dataframe
+alls <- parLapply(cl, list(apr15, may15, jun15, apr16, may16), function(x) do.call('rbind', x))
+	names(alls) <- parSapply(cl, alls, function(x) listnames(x))
 
 ## Set the working directory to a higher level
 setwd('P:/Biological/Flyco/LCR')
@@ -126,11 +141,82 @@ setwd('P:/Biological/Flyco/LCR')
 
 ##### Get light attenuation coefficients #####
 
-## Condense light sensor arrays by site
-a15 <- 
+## Cut out any rows of data with 0 lux (nighttime, or bad readings), take log
+no0 <- function(mylist){
+	mylist2 <- mylist[mylist$Lux > 0, ]
+	mylist2$logLux <- round(log(mylist2$Lux), 2)
+	print(mylist2)
+}
+clusterExport(cl, varlist = 'no0')
+alls1 <- parLapply(cl, alls, function(x) no0(x))
 
+## Limit dataset to only samples with multiple depth measurements
+	## Restrict apr15 dataset to only times and places with both a surface and subsurface measurement
+	## Restrict light sensor array datasets to only times and places with at least 4 measurements
+	## For longitudinal datasets, reduce to only times and places with at least a single measurement
+restrict <- function(mylist){
+	mysums <- as.data.frame(table(as.character(mylist$POSIX),mylist$Site))
+		colnames(mysums) <- c('POSIX', 'Site', 'Freq')
+	yrmon <- paste(year(mylist$POSIX[1]), month(mylist$POSIX[1]), sep = '-')
+	if(yrmon == '2015-4'){
+		mysums2 <- mysums[mysums$Freq == 2, ]
+	} else{
+		site <- substr(mysums$Site[1], 1, 3)
+		if(site == 'Rkm'){
+			mysums2 <- mysums[mysums$Freq == 1, ]
+ 		} else{
+			mysums2 <- mysums[mysums$Freq == 4, ]
+		}
+	}
+	timesiteall <- paste(mylist$POSIX, mylist$Site)
+	timesitesub <- paste(mysums2$POSIX, mysums2$Site)
+	mylist2 <- mylist[timesiteall %in% timesitesub, ]
+}
+clusterExport(cl, varlist = 'restrict')
+alls2 <- parLapply(cl, alls1, function(x) restrict(x))
 
+## Subset only light sensor array (underwater apparatus) data, ignoring surface longitudinal sets
+deep <- alls2[names(alls2) %in% names(which(samptype=='deep'))]
 
+## Run a linear regression for every site-time combination
+lregall<- function(mylist){
+	sitetimeall <- paste(mylist$Site, mylist$POSIX)
+	sitetimeunq <- unique(sitetimeall)
+	lreg <- function(sitetimes){
+		dat <- mylist[sitetimeall %in% sitetimeunq[i],]
+		out1 <- lm(dat$logLux ~ dat$Depth)
+			tab <- dat[1, c('POSIX', 'Site', 'Rkm')]
+				coeff <- round(t(out1$coefficients), 4)
+					colnames(coeff) <- c('Intercept', 'Slope')
+				tab2 <- cbind(tab, coeff)
+				tab2$R2 <- round(summary(out1)$adj.r.squared, 4)
+		print(tab2)
+	}
+	mydat <- foreach(i = 1:length(sitetimeunq), .combine = rbind) %dopar% lreg(i)
+}
+clusterExport(cl, varlist = 'lregall')
+regs <- parLapply(cl, deep, function(x) lregall(x))
+
+## Plot R2s by sample event, by site, over time
+myplot <- function(mylist){
+	plot(mylist$R2 ~ as.POSIXct(mylist$POSIX), type = 'n', xlab = 'Time', ylab = 'R2')
+		Bluepts <- mylist[mylist$Site == 'Blue',]
+			points(Bluepts$R2 ~ as.POSIXct(Bluepts$POSIX), col = 4)
+		Chutepts <- mylist[mylist$Site == 'Chute',]
+			points(Chutepts$R2 ~ as.POSIXct(Chutepts$POSIX), col = 5)
+		Saltpts <- mylist[mylist$Site == 'Salt',]
+			points(Saltpts$R2 ~ as.POSIXct(Saltpts$POSIX), col = 3)
+		Coyotepts <- mylist[mylist$Site == 'Coyote',]
+			points(Coyotepts$R2 ~ as.POSIXct(Coyotepts$POSIX), col = 6)
+		Boulderspts <- mylist[mylist$Site == 'Boulders',]
+			points(Boulderspts$R2 ~ as.POSIXct(Boulderspts$POSIX), col = 2)
+		legend('bottomleft', legend = c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'), col = c(4, 5, 3, 6, 2), pch = 1)
+}
+myplot(regs$may16)
+### STOPPED HERE. Need to investigate these plots more. Blue and Chute in May16 seemed to such, for instance. Sensors getting bent, maybe? Possibly remove offending sensors from dataset?
+
+## Close the clusters
+stopCluster(cl)
 
 
 
