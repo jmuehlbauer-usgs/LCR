@@ -3,12 +3,27 @@
 
 ##### Load libraries #####
 
-## Load parallel, foreach, and lubridate libraries, for running apply operations in parallel and dealing with datetimes
-library(parallel)
-library(foreach)
-library(lubridate)
+## Create function to check if package is installed. Install it if not and load it regardless.
+pkgload <- function(pkg){
+	newpkg <- pkg[!(pkg %in% installed.packages()[, 'Package'])]
+	if(length(newpkg) > 0){
+		install.packages(newpkg, repos = 'http://cran.cnr.berkeley.edu/')
+	}
+	loaded <- lapply(pkg, require, character.only = TRUE, quietly = TRUE)
+}
 
+## Run the function for each package desired
+pkgload(c('parallel', 'foreach', 'lubridate'))
 
+pkgload <- function(pkg){
+	if(require(package = pkg, character.only = TRUE) == FALSE){
+	new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+		install.packages(pkgs = pkg, repos = 'http://cran.cnr.berkeley.edu/')
+	}
+	require(pkg, character.only = TRUE, quietly = TRUE)
+	lapply(pkg, require, character.only = TRUE, quietly = TRUE)
+}
 ##### Read in light sensor data #####
 
 ## Set preliminary working directory for getting data (network or local)
