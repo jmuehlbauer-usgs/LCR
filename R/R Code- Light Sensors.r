@@ -15,15 +15,7 @@ pkgload <- function(pkg){
 ## Run the function for each package desired
 pkgload(c('parallel', 'foreach', 'lubridate'))
 
-pkgload <- function(pkg){
-	if(require(package = pkg, character.only = TRUE) == FALSE){
-	new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
-		install.packages(pkgs = pkg, repos = 'http://cran.cnr.berkeley.edu/')
-	}
-	require(pkg, character.only = TRUE, quietly = TRUE)
-	lapply(pkg, require, character.only = TRUE, quietly = TRUE)
-}
+
 ##### Read in light sensor data #####
 
 ## Set preliminary working directory for getting data (network or local)
