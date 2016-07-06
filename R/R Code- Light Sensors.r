@@ -22,7 +22,7 @@ pkgload(c('parallel', 'foreach', 'lubridate'))
 setwd('P:/Biological/Flyco/LCR/Data/HOBO/Light/Processed')
 
 ## Get light data file names
-	## NOTE: Add new lines for new months here, and also at Lines 25, 117, and 132.
+	## NOTE: Add new lines for new months here, and also at Lines 35 and 126.
 samptype <- c('deep', 'deep', 'long', 'deep', 'deep', 'deep')
 	names(samptype) <- c('apr15', 'may15', 'jun15', 'apr16', 'may16', 'jun16')
 Apr15files <- list.files('2015-04', pattern = '.csv')
@@ -49,8 +49,8 @@ deep <- as.data.frame(c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'))
 		deep[deep$Site %in% c('Chute', 'Boulders'), 'Apr16Stop'] <- deep[deep$Site %in% c('Chute', 'Boulders'), 'Apr16Stop'] - 24 * 3600
 	deep$May16Start <- as.POSIXlt(paste('2016-05-17', c('18:00', '14:30', '10:30', '10:37', '15:34'))) + 3600
 	deep$May16Stop <- as.POSIXlt(paste('2016-05-19', c('13:45', '10:00', '07:00', '08:12', '11:55'))) - 3600
-	#deep$Jun16Start <- as.POSIXlt(paste('2016-06-24', c('16:30', '13:45', '09:00', ))) + 3600
-	#deep$Jun16Stop <- as.POSIXlt(paste('2016-06-26', c('10:35', '08:27', '06:00', ))) - 3600
+	deep$Jun16Start <- as.POSIXlt(paste('2016-06-24', c('16:30', '13:45', '09:00', '09:50', '17:00'))) + 3600
+	deep$Jun16Stop <- as.POSIXlt(paste('2016-06-26', c('10:35', '08:27', '06:00', '17:00', '12:20'))) - 3600
 long <- as.data.frame(substr(Jun15files, 1, regexpr('_', Jun15files) - 1))
 	colnames(long) <- 'Site'
 	long$Jun15Start <- as.POSIXlt(paste('2015-06-25', c('15:15', '14:15', '13:10', '12:20', '11:30', '10:55', '09:30', '09:27', '11:05', '11:40', '12:35', '13:15', '13:40', '16:09', '17:05', '17:30', '18:05'))) + 3600
@@ -135,8 +135,8 @@ apr16 <- parLapply(cl, 1:length(Apr16files), function(x) filefx(X = x, files = A
 	names(apr16) <- indivname(apr16)
 may16 <- parLapply(cl, 1:length(May16files), function(x) filefx(X = x, files = May16files))
 	names(may16) <- indivname(may16)
-#jun16 <- parLapply(cl, 1:length(Jun16files), function(x) filefx(X = x, files = Jun16files))
-#	names(jun16) <- indivname(jun16)
+jun16 <- parLapply(cl, 1:length(Jun16files), function(x) filefx(X = x, files = Jun16files))
+	names(jun16) <- indivname(jun16)
 
 ## Condense each sample month into a single dataframe
 alls <- parLapply(cl, list(apr15, may15, jun15, apr16, may16), function(x) do.call('rbind', x))
@@ -204,8 +204,8 @@ lregall<- function(mylist){
 clusterExport(cl, varlist = 'lregall')
 regs <- parLapply(cl, deep, function(x) lregall(x))
 
-## Plot R2s by sample event, by site, over time
-myplot <- function(mylist){
+## Funciton to plot R2s by sample event, by site, over time
+plotR2 <- function(mylist){
 	plot(mylist$R2 ~ as.POSIXct(mylist$POSIX), type = 'n', xlab = 'Time', ylab = 'R2')
 		Bluepts <- mylist[mylist$Site == 'Blue',]
 			points(Bluepts$R2 ~ as.POSIXct(Bluepts$POSIX), col = 4)
@@ -219,8 +219,32 @@ myplot <- function(mylist){
 			points(Boulderspts$R2 ~ as.POSIXct(Boulderspts$POSIX), col = 2)
 		legend('bottomleft', legend = c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'), col = c(4, 5, 3, 6, 2), pch = 1)
 }
-myplot(regs$may16)
-### STOPPED HERE. Need to investigate these plots more. Blue and Chute in May16 seemed to such, for instance. Sensors getting bent, maybe? Possibly remove offending sensors from dataset?
+
+## Function to plot k by sample event, by site, over time
+plotk <- function(mylist){
+	plot(mylist$Slope ~ as.POSIXct(mylist$POSIX), type = 'n', xlab = 'Time', ylab = 'Slope')
+		Bluepts <- mylist[mylist$Site == 'Blue',]
+			points(Bluepts$Slope ~ as.POSIXct(Bluepts$POSIX), col = 4)
+		Chutepts <- mylist[mylist$Site == 'Chute',]
+			points(Chutepts$Slope ~ as.POSIXct(Chutepts$POSIX), col = 5)
+		Saltpts <- mylist[mylist$Site == 'Salt',]
+			points(Saltpts$Slope ~ as.POSIXct(Saltpts$POSIX), col = 3)
+		Coyotepts <- mylist[mylist$Site == 'Coyote',]
+			points(Coyotepts$Slope ~ as.POSIXct(Coyotepts$POSIX), col = 6)
+		Boulderspts <- mylist[mylist$Site == 'Boulders',]
+			points(Boulderspts$Slope ~ as.POSIXct(Boulderspts$POSIX), col = 2)
+		legend('bottomleft', legend = c('Blue', 'Chute', 'Salt', 'Coyote', 'Boulders'), col = c(4, 5, 3, 6, 2), pch = 1)
+}
+
+## Actually plot all these
+plotk(regs$apr15)
+plotR2(regs$may15); windows()
+plotk(regs$may15)
+plotR2(regs$apr16); windows()
+plotk(regs$apr16)
+plotR2(regs$may16); windows()
+plotk(regs$may16)
+### STOPPED HERE. Need to investigate these plots more. Blue and Chute in May16 seemed to suck, for instance. Sensors getting bent, maybe? Possibly remove offending sensors from dataset?
 
 ## Close the clusters
 stopCluster(cl)
