@@ -6,22 +6,23 @@ cd P:/BIOLOGICAL/Flyco/LCR
 # Initialize git repository (only need to do this the first time).
 git init
 
-# Add remote GitHub repository.
+# Add remote GitHub repository (only need to do this the first time).
 git remote add origin https://github.com/jmuehlbauer-usgs/LCR.git
 
-# Pull from GitHub repository
+# Pull from GitHub repository (if there's newer stuff on GitHub)
 git pull origin master
 
 # Add files to commit (add file or folder names after "add", separated by spaces).
 git status
 git add
 
+# Delete files, if desired (add file or folder names after "add", separated by spaces).
+git rm
+
 # Commit the changes (Write a short message explaining what you changed after "-m", in quotes).
-git commit -m 'Type something here.'
+git commit -m "Type something here."
 
 # Push committed changes to GitHub
 git push origin master
 
-# All done!
 
-#Or am I???
